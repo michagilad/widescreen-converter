@@ -1,291 +1,326 @@
-// Wait for FFmpeg to be available
 document.addEventListener('DOMContentLoaded', async () => {
-    const { createFFmpeg, fetchFile } = FFmpeg;
-    const ffmpeg = createFFmpeg({
-        log: true,
-        logger: ({ message }) => console.log('FFmpeg Log:', message),
-        progress: (p) => console.log('FFmpeg Progress:', p)
-    });
-
-    // DOM Elements
+    // DOM elements
     const dropzone = document.getElementById('dropzone');
     const fileInput = document.getElementById('fileInput');
     const convertBtn = document.getElementById('convertBtn');
-    const progressBar = document.querySelector('progress');
-    const progressDiv = document.getElementById('progress');
+    const status = document.getElementById('status');
+    const statusText = document.getElementById('statusText');
+    const progressBar = document.getElementById('progressBar');
+    const previewSection = document.getElementById('previewSection');
     const previewContainer = document.getElementById('previewContainer');
-    const statusDiv = document.getElementById('status');
-    const bgColor = document.getElementById('bgColor');
-    const bgColorHex = document.getElementById('bgColorHex');
+    const resultsSection = document.getElementById('resultsSection');
+    const resultsContainer = document.getElementById('resultsContainer');
     const downloadAllBtn = document.getElementById('downloadAllBtn');
-    const downloadAllContainer = document.getElementById('downloadAllContainer');
+    const widthInput = document.getElementById('width');
+    const heightInput = document.getElementById('height');
+    const bgColorInput = document.getElementById('bgColor');
 
     let files = [];
     let processedImages = [];
 
-    // Color picker synchronization
-    bgColor.addEventListener('input', (e) => {
-        bgColorHex.value = e.target.value.toUpperCase();
-    });
-
-    bgColorHex.addEventListener('input', (e) => {
-        const value = e.target.value;
-        if (/^#[0-9A-Fa-f]{6}$/.test(value)) {
-            bgColor.value = value;
-            bgColorHex.classList.remove('border-red-500');
-        } else {
-            bgColorHex.classList.add('border-red-500');
-        }
-    });
-
-    // Show status message with progress
-    function showStatus(message, type = 'error', progress = null) {
-        statusDiv.textContent = message + (progress !== null ? ` (${Math.round(progress)}%)` : '');
-        statusDiv.className = type === 'error' ? 'error' : 'success';
-        statusDiv.classList.remove('hidden');
-    }
-
-    // Hide status message
-    function hideStatus() {
-        statusDiv.classList.add('hidden');
-    }
-
     // Initialize FFmpeg
+    let ffmpeg;
     try {
-        console.log('Starting FFmpeg load...');
+        const { createFFmpeg } = FFmpeg;
+        ffmpeg = createFFmpeg({
+            log: true,
+            logger: ({ message }) => console.log('FFmpeg Log:', message),
+            progress: (p) => console.log('FFmpeg Progress:', p)
+        });
+        
         await ffmpeg.load();
-        console.log('FFmpeg loaded successfully!');
+        console.log('FFmpeg loaded successfully');
+        
+        // Test FFmpeg functionality
+        try {
+            console.log('Testing FFmpeg with -version command...');
+            await ffmpeg.run('-version');
+            console.log('FFmpeg test successful - ready to use');
+        } catch (testError) {
+            console.warn('FFmpeg test failed, but continuing:', testError);
+        }
+        
         convertBtn.disabled = false;
-        convertBtn.textContent = 'Convert Images';
-        showStatus('Ready to convert images', 'success');
+        convertBtn.textContent = 'Convert Files to JPG';
     } catch (error) {
-        console.error('FFmpeg loading error:', error);
-        showStatus('Error loading FFmpeg. Please try using Chrome or Firefox.');
-        convertBtn.textContent = 'Error Loading FFmpeg';
-        return;
+        console.error('Failed to load FFmpeg:', error);
+        statusText.textContent = 'Failed to load FFmpeg. Please refresh the page.';
+        status.classList.remove('hidden');
+        status.classList.add('bg-red-50', 'border-red-200');
     }
 
-    // Download all images
-    downloadAllBtn.addEventListener('click', () => {
-        if (processedImages.length === 0) return;
-
-        // Create a zip file containing all images
-        const zip = new JSZip();
-        const promises = processedImages.map(({ url, name }, index) => {
-            return fetch(url)
-                .then(response => response.blob())
-                .then(blob => {
-                    zip.file(`widescreen_${name}`, blob);
-                });
-        });
-
-        Promise.all(promises).then(() => {
-            zip.generateAsync({ type: 'blob' })
-                .then(content => {
-                    const zipUrl = URL.createObjectURL(content);
-                    const link = document.createElement('a');
-                    link.href = zipUrl;
-                    link.download = 'widescreen_images.zip';
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                    URL.revokeObjectURL(zipUrl);
-                });
-        });
-    });
-
-    // Drag and drop handlers
+    // File handling
+    dropzone.addEventListener('click', () => fileInput.click());
+    
     dropzone.addEventListener('dragover', (e) => {
         e.preventDefault();
         dropzone.classList.add('dragover');
     });
-
+    
     dropzone.addEventListener('dragleave', () => {
         dropzone.classList.remove('dragover');
     });
-
+    
     dropzone.addEventListener('drop', (e) => {
         e.preventDefault();
         dropzone.classList.remove('dragover');
-        const droppedFiles = Array.from(e.dataTransfer.files).filter(file => file.type.startsWith('image/'));
-        if (droppedFiles.length === 0) {
-            showStatus('Please drop image files only.');
-            return;
-        }
-        handleFiles(droppedFiles);
+        handleFiles(e.dataTransfer.files);
     });
-
-    dropzone.addEventListener('click', () => {
-        fileInput.click();
-    });
-
+    
     fileInput.addEventListener('change', (e) => {
-        if (e.target.files.length === 0) return;
-        handleFiles(Array.from(e.target.files));
+        handleFiles(e.target.files);
     });
 
-    function handleFiles(newFiles) {
-        files = newFiles;
-        hideStatus();
+    function handleFiles(fileList) {
+        files = Array.from(fileList);
         updatePreview();
-        downloadAllContainer.classList.add('hidden');
+        previewSection.classList.remove('hidden');
     }
 
     function updatePreview() {
         previewContainer.innerHTML = '';
-        files.forEach(file => {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                const div = document.createElement('div');
-                div.className = 'preview-item';
+        files.forEach((file, index) => {
+            const previewItem = document.createElement('div');
+            previewItem.className = 'text-center';
+            
+            if (file.type.startsWith('image/')) {
                 const img = document.createElement('img');
-                img.src = e.target.result;
-                div.appendChild(img);
-                previewContainer.appendChild(div);
-            };
-            reader.onerror = () => {
-                showStatus(`Error loading preview for ${file.name}`);
-            };
-            reader.readAsDataURL(file);
+                img.src = URL.createObjectURL(file);
+                img.className = 'preview-image mx-auto mb-2';
+                img.alt = file.name;
+                previewItem.appendChild(img);
+            } else {
+                const icon = document.createElement('div');
+                icon.className = 'w-16 h-16 mx-auto mb-2 bg-gray-200 rounded-lg flex items-center justify-center';
+                icon.innerHTML = '<svg class="w-8 h-8 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>';
+                previewItem.appendChild(icon);
+            }
+            
+            const fileName = document.createElement('p');
+            fileName.className = 'text-sm text-gray-600 truncate';
+            fileName.textContent = file.name;
+            previewItem.appendChild(fileName);
+            
+            previewContainer.appendChild(previewItem);
         });
     }
 
+    // Conversion
     convertBtn.addEventListener('click', async () => {
-        if (files.length === 0) {
-            showStatus('Please select at least one image');
-            return;
-        }
-
-        const width = document.getElementById('width').value;
-        const height = document.getElementById('height').value;
-        const bgColorValue = bgColorHex.value;
-
-        if (!width || !height) {
-            showStatus('Please enter valid dimensions');
-            return;
-        }
-
-        if (!/^#[0-9A-Fa-f]{6}$/.test(bgColorValue)) {
-            showStatus('Please enter a valid hex color code');
-            return;
-        }
-
-        hideStatus();
-        progressDiv.classList.remove('hidden');
+        if (!ffmpeg || files.length === 0) return;
+        
         convertBtn.disabled = true;
-        convertBtn.textContent = 'Processing...';
-        downloadAllContainer.classList.add('hidden');
-        processedImages = [];
-        previewContainer.innerHTML = '';
-
+        status.classList.remove('hidden');
+        statusText.textContent = 'Converting files...';
+        progressBar.style.width = '0%';
+        
         try {
+            const width = parseInt(widthInput.value);
+            const height = parseInt(heightInput.value);
+            const bgColor = bgColorInput.value;
+            const bgColorValue = bgColor.replace('#', '0x') + 'ff';
+            
+            console.log('Starting conversion with settings:', { width, height, bgColor, bgColorValue });
+            console.log('Number of files to process:', files.length);
+            
+            processedImages = [];
             const results = [];
+            
             for (let i = 0; i < files.length; i++) {
-                const progress = ((i / files.length) * 100);
-                progressBar.value = progress;
-                showStatus(`Processing image ${i + 1} of ${files.length}`, 'success', progress);
+                const file = files[i];
+                console.log(`Processing file ${i + 1}/${files.length}:`, file.name, file.type, file.size);
                 
-                // Process in chunks to keep UI responsive
-                await new Promise(resolve => setTimeout(resolve, 100));  // Small delay between files
-
+                statusText.textContent = `Converting ${file.name}...`;
+                progressBar.style.width = `${((i + 1) / files.length) * 100}%`;
+                
                 try {
-                    // Process the image using FFmpeg
-                    console.log('Starting FFmpeg processing...');
-                    try {
-                        // Write the input file to FFmpeg's virtual filesystem
-                        const inputFileName = `input${i}.png`;
-                        console.log('Loading file into FFmpeg...');
-                        await ffmpeg.FS('writeFile', inputFileName, await fetchFile(files[i]));
-                        console.log('File loaded successfully');
-
-                        // Simple one-step processing with maximum quality
-                        console.log('Processing image...');
-                        await ffmpeg.run(
-                            '-i', inputFileName,
-                            '-vf', `scale=${width}:${height}:force_original_aspect_ratio=decrease:flags=lanczos,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:color=${bgColorValue}`,
-                            '-sws_flags', 'lanczos+accurate_rnd+full_chroma_int+full_chroma_inp',
-                            '-pix_fmt', 'rgba',
-                            '-compression_level', '0',
-                            '-quality', '100',
-                            '-lossless', '1',
-                            '-pred', 'mixed',
-                            '-y',
-                            `output${i}.png`
-                        );
-                        console.log('FFmpeg processing completed');
-
-                        // Read the output file
-                        console.log('Reading processed file...');
-                        const data = ffmpeg.FS('readFile', `output${i}.png`);
-                        console.log('File read successfully');
-                        
-                        // Create blob with explicit PNG type and maximum quality
-                        const blob = new Blob([data.buffer], { 
-                            type: 'image/png'
-                        });
-                        const url = URL.createObjectURL(blob);
-                        results.push({ url, name: files[i].name.replace(/\.[^/.]+$/, '') + '_widescreen.png' });
-                        processedImages.push({ url, name: files[i].name.replace(/\.[^/.]+$/, '') + '_widescreen.png' });
-                        
-                        // Clean up
-                        console.log('Cleaning up...');
-                        ffmpeg.FS('unlink', inputFileName);
-                        ffmpeg.FS('unlink', `output${i}.png`);
-                        console.log('Cleanup completed');
-                        
-                        // Update progress
-                        const progress = ((i + 1) / files.length) * 100;
-                        progressBar.value = progress;
-                        showStatus(`Processed ${i + 1} of ${files.length} images`, 'success', progress);
-                        
-                        // Add small delay between files
-                        await new Promise(resolve => setTimeout(resolve, 100));
-                        
-                    } catch (error) {
-                        console.error(`Detailed error for ${files[i].name}:`, error);
-                        showStatus(`Error processing ${files[i].name}: ${error.message || 'Unknown error'}`);
-                        continue;
-                    }
-                } catch (error) {
-                    console.error(`Error details for ${files[i].name}:`, error);
-                    showStatus(`Error processing ${files[i].name}: ${error.message || 'Unknown error'}`);
-                    continue;
+                    // Write file to FFmpeg
+                    const inputFileName = `input${i}.${file.name.split('.').pop()}`;
+                    console.log('Writing file to FFmpeg:', inputFileName);
+                    
+                    // Read file data using FileReader instead of fetchFile
+                    const fileData = await new Promise((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onload = () => resolve(new Uint8Array(reader.result));
+                        reader.onerror = reject;
+                        reader.readAsArrayBuffer(file);
+                    });
+                    
+                    console.log('File data read, size:', fileData.byteLength);
+                    
+                    ffmpeg.FS('writeFile', inputFileName, fileData);
+                    console.log('File written to FFmpeg filesystem');
+                    
+                    // Convert to JPG with specified dimensions
+                    const ffmpegCommand = [
+                        '-i', inputFileName,
+                        '-vf', `scale=${width}:${height}:force_original_aspect_ratio=decrease:flags=lanczos,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:color=${bgColorValue}`,
+                        '-sws_flags', 'lanczos+accurate_rnd+full_chroma_int+full_chroma_inp',
+                        '-pix_fmt', 'yuv420p',
+                        '-q:v', '2',
+                        '-y',
+                        `output${i}.jpg`
+                    ];
+                    
+                    // Enhanced command for better transparency handling
+                    const enhancedCommand = [
+                        '-i', inputFileName,
+                        '-vf', [
+                            // Scale the image to fit within target dimensions while maintaining aspect ratio
+                            `scale=${width}:${height}:force_original_aspect_ratio=decrease:flags=lanczos`,
+                            // Pad to exact dimensions with background color (this fills transparency)
+                            `pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:color=${bgColorValue}`,
+                            // Ensure any remaining alpha/transparency is filled
+                            `format=yuv420p`
+                        ].join(','),
+                        // Force output to JPG (which doesn't support transparency)
+                        '-pix_fmt', 'yuv420p',
+                        // High quality output
+                        '-q:v', '2',
+                        // Overwrite output file
+                        '-y',
+                        `output${i}.jpg`
+                    ];
+                    
+                    console.log('Running enhanced FFmpeg command for transparency handling:', enhancedCommand);
+                    await ffmpeg.run(...enhancedCommand);
+                    console.log('FFmpeg conversion completed');
+                    
+                    // Read the output file
+                    console.log('Reading output file...');
+                    const data = ffmpeg.FS('readFile', `output${i}.jpg`);
+                    console.log('Output file read, size:', data.byteLength);
+                    
+                    const blob = new Blob([data.buffer], { type: 'image/jpeg' });
+                    const url = URL.createObjectURL(blob);
+                    
+                    const resultName = files[i].name.replace(/\.[^/.]+$/, '') + '_converted.jpg';
+                    results.push({ url, name: resultName });
+                    processedImages.push({ url, name: resultName });
+                    
+                    console.log('File processed successfully:', resultName);
+                    
+                    // Clean up
+                    ffmpeg.FS('unlink', inputFileName);
+                    ffmpeg.FS('unlink', `output${i}.jpg`);
+                    console.log('FFmpeg filesystem cleaned up');
+                    
+                } catch (fileError) {
+                    console.error(`Error processing file ${file.name}:`, fileError);
+                    statusText.textContent = `Error processing ${file.name}: ${fileError.message}`;
+                    status.classList.add('bg-red-50', 'border-red-200');
+                    throw fileError; // Re-throw to stop processing
                 }
             }
-
-            // Update preview with processed images
-            previewContainer.innerHTML = '';
-            results.forEach(({ url, name }) => {
-                const div = document.createElement('div');
-                div.className = 'preview-item';
-                const img = document.createElement('img');
-                img.src = url;
-                
-                // Add download button
-                const downloadBtn = document.createElement('a');
-                downloadBtn.href = url;
-                downloadBtn.download = `widescreen_${name}`;
-                downloadBtn.className = 'absolute bottom-2 right-2 bg-blue-600 text-white px-3 py-1 rounded-md text-sm';
-                downloadBtn.textContent = 'Download';
-                
-                div.appendChild(img);
-                div.appendChild(downloadBtn);
-                previewContainer.appendChild(div);
-            });
-
-            if (results.length > 0) {
-                showStatus(`Successfully processed ${results.length} images!`, 'success');
-                downloadAllContainer.classList.remove('hidden');
+            
+            displayResults(results);
+            statusText.textContent = 'Conversion completed!';
+            status.classList.remove('bg-blue-50', 'border-blue-200');
+            status.classList.add('bg-green-50', 'border-green-200');
+            
+            // Update the spinner to a checkmark
+            const spinner = status.querySelector('.animate-spin');
+            if (spinner) {
+                spinner.classList.remove('animate-spin', 'rounded-full', 'h-5', 'w-5', 'border-b-2', 'border-blue-600');
+                spinner.classList.add('bg-green-500', 'rounded-full', 'h-5', 'w-5', 'flex', 'items-center', 'justify-center');
+                spinner.innerHTML = '✓';
             }
-
+            
+            console.log('All files processed successfully');
+            
         } catch (error) {
-            console.error('Error processing images:', error);
-            showStatus('Error processing images. Please try again.');
+            console.error('Conversion error:', error);
+            console.error('Error details:', {
+                name: error.name,
+                message: error.message,
+                stack: error.stack
+            });
+            
+            statusText.textContent = 'Conversion failed: ' + error.message;
+            status.classList.remove('bg-blue-50', 'border-blue-200');
+            status.classList.add('bg-red-50', 'border-red-200');
+            
+            // Update the spinner to an X for error
+            const spinner = status.querySelector('.animate-spin');
+            if (spinner) {
+                spinner.classList.remove('animate-spin', 'rounded-full', 'h-5', 'w-5', 'border-b-2', 'border-blue-600');
+                spinner.classList.add('bg-red-500', 'rounded-full', 'h-5', 'w-5', 'flex', 'items-center', 'justify-center');
+                spinner.innerHTML = '✗';
+            }
+            
+            // Show more helpful error messages
+            if (error.message.includes('fetch')) {
+                statusText.textContent = 'Network error: Please check your internet connection';
+            } else if (error.message.includes('FS')) {
+                statusText.textContent = 'File system error: Please try with a different file';
+            } else if (error.message.includes('run')) {
+                statusText.textContent = 'FFmpeg processing error: Please check file format';
+            }
         } finally {
-            progressDiv.classList.add('hidden');
             convertBtn.disabled = false;
-            convertBtn.textContent = 'Convert Images';
-            progressBar.value = 0;
         }
+    });
+
+    function displayResults(results) {
+        resultsContainer.innerHTML = '';
+        results.forEach(result => {
+            const resultItem = document.createElement('div');
+            resultItem.className = 'text-center';
+            
+            const img = document.createElement('img');
+            img.src = result.url;
+            img.className = 'preview-image mx-auto mb-2';
+            img.alt = result.name;
+            resultItem.appendChild(img);
+            
+            const fileName = document.createElement('p');
+            fileName.className = 'text-sm text-gray-600 truncate';
+            fileName.textContent = result.name;
+            resultItem.appendChild(fileName);
+            
+            const downloadBtn = document.createElement('button');
+            downloadBtn.className = 'bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1 rounded mt-2';
+            downloadBtn.textContent = 'Download';
+            downloadBtn.onclick = () => downloadFile(result.url, result.name);
+            resultItem.appendChild(downloadBtn);
+            
+            resultsContainer.appendChild(resultItem);
+        });
+        
+        resultsSection.classList.remove('hidden');
+    }
+
+    function downloadFile(url, filename) {
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+    }
+
+    // Download all as ZIP
+    downloadAllBtn.addEventListener('click', async () => {
+        if (processedImages.length === 0) return;
+        
+        const zip = new JSZip();
+        
+        for (const image of processedImages) {
+            const response = await fetch(image.url);
+            const blob = await response.blob();
+            zip.file(image.name, blob);
+        }
+        
+        const zipBlob = await zip.generateAsync({ type: 'blob' });
+        const url = URL.createObjectURL(zipBlob);
+        
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'converted_images.zip';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        
+        URL.revokeObjectURL(url);
     });
 }); 
