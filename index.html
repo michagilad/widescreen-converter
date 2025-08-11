@@ -3,135 +3,105 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Online Widescreen Image Converter</title>
-    <meta http-equiv="Cross-Origin-Opener-Policy" content="same-origin">
-    <meta http-equiv="Cross-Origin-Embedder-Policy" content="require-corp">
+    <title>Online File to JPG Converter</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet" crossorigin="anonymous">
-    <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js" defer crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.9.8/dist/ffmpeg.min.js" defer crossorigin="anonymous"></script>
     <script src="https://unpkg.com/jszip@3.7.1/dist/jszip.min.js" defer crossorigin="anonymous"></script>
     <style>
         .dropzone {
-            border: 2px dashed #ccc;
-            border-radius: 4px;
-            padding: 20px;
-            text-align: center;
-            background: #f8f8f8;
+            border: 2px dashed #cbd5e0;
             transition: all 0.3s ease;
         }
         .dropzone.dragover {
-            background: #e1e1e1;
-            border-color: #999;
+            border-color: #4299e1;
+            background-color: #ebf8ff;
         }
-        .preview-container {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-            gap: 1rem;
-            margin-top: 1rem;
-        }
-        .preview-item {
-            position: relative;
-            padding-top: 56.25%; /* 16:9 Aspect Ratio */
-            background: #f0f0f0;
-            border-radius: 4px;
-            overflow: hidden;
-        }
-        .preview-item img {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
+        .preview-image {
+            max-width: 200px;
+            max-height: 200px;
             object-fit: contain;
-        }
-        progress {
-            width: 100%;
-            height: 20px;
-            margin-top: 10px;
-        }
-        #status {
-            padding: 10px;
-            margin: 10px 0;
-            border-radius: 4px;
-        }
-        .error {
-            background-color: #fee2e2;
-            color: #dc2626;
-        }
-        .success {
-            background-color: #dcfce7;
-            color: #16a34a;
-        }
-        .color-input-group {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-        }
-        .color-input-group input[type="color"] {
-            width: 50px;
-            height: 38px;
-            padding: 0;
-        }
-        .color-input-group input[type="text"] {
-            width: 100px;
         }
     </style>
 </head>
-<body class="bg-gray-100 min-h-screen p-8">
-    <div class="max-w-4xl mx-auto bg-white rounded-lg shadow-lg p-6">
-        <h1 class="text-3xl font-bold mb-6 text-center">Online Widescreen Image Converter</h1>
+<body class="bg-gray-50 min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <h1 class="text-3xl font-bold text-center text-gray-800 mb-8">Online File to JPG Converter</h1>
         
-        <div id="status" class="hidden"></div>
-        
-        <div class="space-y-6">
-            <div class="dropzone" id="dropzone">
-                <p class="text-gray-600">Drag and drop images here or click to select files</p>
-                <input type="file" id="fileInput" multiple accept="image/*" class="hidden">
-            </div>
-
-            <div class="grid grid-cols-2 gap-4">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700">Output Width</label>
-                    <input type="number" id="width" value="1920" min="640" max="3840" 
-                           class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700">Output Height</label>
-                    <input type="number" id="height" value="1080" min="360" max="2160"
-                           class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+        <div class="max-w-4xl mx-auto">
+            <!-- File Upload Section -->
+            <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+                <h2 class="text-xl font-semibold mb-4">Upload Files</h2>
+                <div id="dropzone" class="dropzone rounded-lg p-8 text-center cursor-pointer">
+                    <div class="text-gray-600">
+                        <svg class="mx-auto h-12 w-12 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                        </svg>
+                        <p class="text-lg">Drag and drop files here, or click to select</p>
+                        <p class="text-sm text-gray-500 mt-2">Supports any file type - converts to JPG</p>
+                    </div>
+                    <input type="file" id="fileInput" multiple accept="*/*" class="hidden">
                 </div>
             </div>
 
-            <div>
-                <label class="block text-sm font-medium text-gray-700">Background Color</label>
-                <div class="color-input-group mt-1">
-                    <input type="color" id="bgColor" value="#F7F7F7">
-                    <input type="text" id="bgColorHex" value="#F7F7F7" 
-                           class="rounded-md border-gray-300 shadow-sm"
-                           pattern="^#[0-9A-Fa-f]{6}$"
-                           placeholder="#F7F7F7">
+            <!-- Settings Section -->
+            <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+                <h2 class="text-xl font-semibold mb-4">Conversion Settings</h2>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Width (px)</label>
+                        <input type="number" id="width" value="1920" min="1" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Height (px)</label>
+                        <input type="number" id="height" value="1080" min="1" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Background Color</label>
+                        <input type="color" id="bgColor" value="#000000" class="w-full h-10 border border-gray-300 rounded-md">
+                        <p class="text-xs text-gray-500 mt-1">This color will fill transparent areas in PNG files</p>
+                    </div>
                 </div>
             </div>
 
-            <button id="convertBtn" disabled
-                    class="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed">
-                Loading FFmpeg...
-            </button>
-
-            <div id="progress" class="hidden">
-                <div class="text-sm font-medium text-gray-700">Processing...</div>
-                <progress value="0" max="100"></progress>
-            </div>
-
-            <div id="downloadAllContainer" class="hidden">
-                <button id="downloadAllBtn"
-                        class="w-full bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 mb-4">
-                    Download All Images (ZIP)
+            <!-- Convert Button -->
+            <div class="text-center mb-6">
+                <button id="convertBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-8 rounded-lg text-lg transition-colors duration-200">
+                    Convert Files to JPG
                 </button>
             </div>
 
-            <div id="previewContainer" class="preview-container"></div>
+            <!-- Status and Progress -->
+            <div id="status" class="hidden bg-blue-50 border border-blue-200 rounded-md p-4 mb-6">
+                <div class="flex items-center">
+                    <div class="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600 mr-3"></div>
+                    <span id="statusText" class="text-blue-800">Processing...</span>
+                </div>
+                <div class="mt-3">
+                    <div class="bg-blue-200 rounded-full h-2">
+                        <div id="progressBar" class="bg-blue-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Preview Section -->
+            <div id="previewSection" class="hidden bg-white rounded-lg shadow-md p-6 mb-6">
+                <h2 class="text-xl font-semibold mb-4">File Preview</h2>
+                <div id="previewContainer" class="grid grid-cols-2 md:grid-cols-4 gap-4"></div>
+            </div>
+
+            <!-- Results Section -->
+            <div id="resultsSection" class="hidden bg-white rounded-lg shadow-md p-6">
+                <h2 class="text-xl font-semibold mb-4">Converted Files</h2>
+                <div id="resultsContainer" class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4"></div>
+                <div class="text-center">
+                    <button id="downloadAllBtn" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-6 rounded-lg transition-colors duration-200">
+                        Download All as ZIP
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
+
     <script src="app.js"></script>
 </body>
 </html> 
