@@ -151,7 +151,16 @@ document.addEventListener('DOMContentLoaded', async () => {
             const width = parseInt(widthInput.value);
             const height = parseInt(heightInput.value);
             const bgColor = bgColorInput.value;
-            const bgColorValue = bgColor.replace('#', '0x') + 'ff';
+            // Convert hex color to FFmpeg format: #RRGGBB -> 0xRRGGBB
+            const bgColorValue = bgColor.replace('#', '0x');
+            
+            // Also try different color formats for better compatibility
+            const bgColorFormats = [
+                bgColorValue,                    // 0xRRGGBB
+                bgColor.replace('#', ''),        // RRGGBB (without 0x)
+                bgColor,                         // #RRGGBB (original format)
+                bgColor.replace('#', '0x') + 'ff' // 0xRRGGBBff (with alpha)
+            ];
             
             const scalingMode = scalingModeSelect.value;
             console.log('Starting conversion with settings:', { width, height, bgColor, bgColorValue, scalingMode });
@@ -162,15 +171,29 @@ document.addEventListener('DOMContentLoaded', async () => {
             
             for (let i = 0; i < files.length; i++) {
                 const file = files[i];
-                console.log(`Processing file ${i + 1}/${files.length}:`, file.name, file.type, file.size);
-                
-                statusText.textContent = `Converting ${file.name}...`;
-                progressBar.style.width = `${((i + 1) / files.length) * 100}%`;
-                
-                try {
-                    // Write file to FFmpeg
-                    const inputFileName = `input${i}.${file.name.split('.').pop()}`;
-                    console.log('Writing file to FFmpeg:', inputFileName);
+                                    console.log(`Processing file ${i + 1}/${files.length}:`, file.name, file.type, file.size);
+                    
+                    // Check if file might have transparency
+                    const hasTransparency = file.type === 'image/png' || file.name.toLowerCase().endsWith('.png');
+                    console.log('File transparency check:', { 
+                        type: file.type, 
+                        name: file.name, 
+                        hasTransparency: hasTransparency 
+                    });
+                    
+                    // Additional debugging for transparency handling
+                    if (hasTransparency) {
+                        console.log('🔍 PNG file detected - will use enhanced transparency handling');
+                        console.log('🎨 Background color:', bgColor, '-> FFmpeg format:', bgColorValue);
+                    }
+                    
+                    statusText.textContent = `Converting ${file.name}...`;
+                    progressBar.style.width = `${((i + 1) / files.length) * 100}%`;
+                    
+                    try {
+                        // Write file to FFmpeg
+                        const inputFileName = `input${i}.${file.name.split('.').pop()}`;
+                        console.log('Writing file to FFmpeg:', inputFileName);
                     
                     // Read file data using FileReader instead of fetchFile
                     const fileData = await new Promise((resolve, reject) => {
@@ -185,66 +208,204 @@ document.addEventListener('DOMContentLoaded', async () => {
                     ffmpeg.FS('writeFile', inputFileName, fileData);
                     console.log('File written to FFmpeg filesystem');
                     
-                    // Convert to JPG with specified dimensions
-                    const ffmpegCommand = [
-                        '-i', inputFileName,
-                        '-vf', `scale=${width}:${height}:force_original_aspect_ratio=decrease:flags=lanczos,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:color=${bgColorValue}`,
-                        '-sws_flags', 'lanczos+accurate_rnd+full_chroma_int+full_chroma_inp',
-                        '-pix_fmt', 'yuv420p',
-                        '-q:v', '2',
-                        '-y',
-                        `output${i}.jpg`
-                    ];
-                    
                     // Get scaling mode and build appropriate FFmpeg command
                     const scalingMode = scalingModeSelect.value;
                     let enhancedCommand;
                     
-                    if (scalingMode === 'fit') {
-                        // Fit mode: scale to fit within dimensions, pad with background color
-                        enhancedCommand = [
-                            '-i', inputFileName,
-                            '-vf', [
-                                // Scale the image to fit within target dimensions while maintaining aspect ratio
-                                `scale=${width}:${height}:force_original_aspect_ratio=decrease:flags=lanczos`,
-                                // Pad to exact dimensions with background color (this fills transparency)
-                                `pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:color=${bgColorValue}`,
-                                // Ensure any remaining alpha/transparency is filled
-                                `format=yuv420p`
-                            ].join(','),
-                            // Force output to JPG (which doesn't support transparency)
-                            '-pix_fmt', 'yuv420p',
-                            // High quality output
-                            '-q:v', '2',
-                            // Overwrite output file
-                            '-y',
-                            `output${i}.jpg`
-                        ];
+                    // Create a more robust command that properly handles transparency
+                    if (hasTransparency) {
+                        // For PNG files with transparency, use a more explicit approach
+                        console.log('Using enhanced transparency handling for PNG file');
+                        
+                        if (scalingMode === 'fit') {
+                            // Fit mode: scale to fit within dimensions, pad with background color
+                            // Use a two-input approach: create solid background + overlay image
+                            console.log('Using two-input transparency handling method');
+                            enhancedCommand = [
+                                // Create a solid background color
+                                '-f', 'lavfi',
+                                '-i', `color=${bgColorFormats[0]}:size=${width}x${height}`,
+                                // Input the actual image
+                                '-i', inputFileName,
+                                '-filter_complex', [
+                                    // Scale the image to fit within dimensions
+                                    `[1:v]scale=${width}:${height}:force_original_aspect_ratio=decrease:flags=lanczos[scaled]`,
+                                    // Overlay the scaled image on the background
+                                    `[0:v][scaled]overlay=(W-w)/2:(H-h)/2`
+                                ].join(';'),
+                                // Force output to JPG
+                                '-pix_fmt', 'yuv420p',
+                                // High quality output
+                                '-q:v', '2',
+                                // Overwrite output file
+                                '-y',
+                                `output${i}.jpg`
+                            ];
+                        } else {
+                            // Fill mode: scale to fill dimensions, crop excess parts
+                            enhancedCommand = [
+                                // Create a solid background color
+                                '-f', 'lavfi',
+                                '-i', `color=${bgColorFormats[0]}:size=${width}x${height}`,
+                                // Input the actual image
+                                '-i', inputFileName,
+                                '-filter_complex', [
+                                    // Scale the image to fill target dimensions
+                                    `[1:v]scale=${width}:${height}:force_original_aspect_ratio=increase:flags=lanczos[scaled]`,
+                                    // Crop to exact dimensions from center
+                                    `[scaled]crop=${width}:${height}[cropped]`,
+                                    // Overlay the cropped image on the background
+                                    `[0:v][cropped]overlay=(W-w)/2:(H-h)/2`
+                                ].join(';'),
+                                // Force output to JPG
+                                '-pix_fmt', 'yuv420p',
+                                // High quality output
+                                '-q:v', '2',
+                                // Overwrite output file
+                                '-y',
+                                `output${i}.jpg`
+                            ];
+                        }
                     } else {
-                        // Fill mode: scale to fill dimensions, crop excess parts
-                        enhancedCommand = [
-                            '-i', inputFileName,
-                            '-vf', [
-                                // Scale the image to fill target dimensions while maintaining aspect ratio
-                                `scale=${width}:${height}:force_original_aspect_ratio=increase:flags=lanczos`,
-                                // Crop to exact dimensions from center
-                                `crop=${width}:${height}`,
-                                // Ensure any remaining alpha/transparency is filled
-                                `format=yuv420p`
-                            ].join(','),
-                            // Force output to JPG (which doesn't support transparency)
-                            '-pix_fmt', 'yuv420p',
-                            // High quality output
-                            '-q:v', '2',
-                            // Overwrite output file
-                            '-y',
-                            `output${i}.jpg`
-                        ];
+                        // For non-transparent files, use standard approach
+                        console.log('Using standard conversion for non-transparent file');
+                        
+                        if (scalingMode === 'fit') {
+                            // Fit mode: scale to fit within dimensions, pad with background color
+                            enhancedCommand = [
+                                '-i', inputFileName,
+                                '-vf', [
+                                    // Scale the image to fit within target dimensions while maintaining aspect ratio
+                                    `scale=${width}:${height}:force_original_aspect_ratio=decrease:flags=lanczos`,
+                                    // Pad to exact dimensions with background color (this fills transparency)
+                                    `pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:color=${bgColorValue}`,
+                                    // Ensure any remaining alpha/transparency is filled
+                                    `format=yuv420p`
+                                ].join(','),
+                                // Force output to JPG (which doesn't support transparency)
+                                '-pix_fmt', 'yuv420p',
+                                // High quality output
+                                '-q:v', '2',
+                                // Overwrite output file
+                                '-y',
+                                `output${i}.jpg`
+                            ];
+                        } else {
+                            // Fill mode: scale to fill dimensions, crop excess parts
+                            enhancedCommand = [
+                                '-i', inputFileName,
+                                '-vf', [
+                                    // Scale the image to fill target dimensions while maintaining aspect ratio
+                                    `scale=${width}:${height}:force_original_aspect_ratio=increase:flags=lanczos`,
+                                    // Crop to exact dimensions from center
+                                    `crop=${width}:${height}`,
+                                    // Ensure any remaining alpha/transparency is filled
+                                    `format=yuv420p`
+                                ].join(','),
+                                // Force output to JPG (which doesn't support transparency)
+                                '-pix_fmt', 'yuv420p',
+                                // High quality output
+                                '-q:v', '2',
+                                // Overwrite output file
+                                '-y',
+                                `output${i}.jpg`
+                            ];
+                        }
                     }
                     
                     console.log(`Running FFmpeg command for ${scalingMode} mode:`, enhancedCommand);
-                    await ffmpeg.run(...enhancedCommand);
-                    console.log('FFmpeg conversion completed');
+                    console.log('Background color being used:', bgColor, '-> FFmpeg format:', bgColorValue);
+                    console.log('🎨 Available color formats:', bgColorFormats);
+                    console.log('🔧 Full FFmpeg command:', enhancedCommand.join(' '));
+                    console.log('🚀 Using method:', hasTransparency ? 'Two-input transparency handling' : 'Standard conversion');
+                    
+                    try {
+                        await ffmpeg.run(...enhancedCommand);
+                        console.log('FFmpeg conversion completed');
+                    } catch (ffmpegError) {
+                        console.error('FFmpeg command failed:', ffmpegError);
+                        console.error('Command that failed:', enhancedCommand);
+                        
+                        // Try a fallback approach for transparency handling
+                        console.log('Trying fallback transparency handling...');
+                        
+                        // Try different background color formats
+                        const fallbackColors = bgColorFormats;
+                        
+                        let fallbackSuccess = false;
+                        for (const fallbackColor of fallbackColors) {
+                            try {
+                                console.log(`Trying fallback with color format: ${fallbackColor}`);
+                                
+                                // Try different filter approaches for transparency
+                                const fallbackApproaches = [
+                                    // Approach 1: Two-input method with solid background (fit mode)
+                                    `-f lavfi -i color=${fallbackColor}:size=${width}x${height} -i ${inputFileName} -filter_complex [1:v]scale=${width}:${height}:force_original_aspect_ratio=decrease:flags=lanczos[scaled];[0:v][scaled]overlay=(W-w)/2:(H-h)/2`,
+                                    // Approach 2: Two-input method with solid background (fill mode)
+                                    `-f lavfi -i color=${fallbackColor}:size=${width}x${height} -i ${inputFileName} -filter_complex [1:v]scale=${width}:${height}:force_original_aspect_ratio=increase:flags=lanczos[scaled];[scaled]crop=${width}:${height}[cropped];[0:v][cropped]overlay=(W-w)/2:(H-h)/2`,
+                                    // Approach 3: Standard pad with color
+                                    `scale=${width}:${height}:force_original_aspect_ratio=decrease:flags=lanczos,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:color=${fallbackColor}`,
+                                    // Approach 4: Use geq filter to create solid background
+                                    `scale=${width}:${height}:force_original_aspect_ratio=decrease:flags=lanczos,geq=r=${fallbackColor}:g=${fallbackColor}:b=${fallbackColor}`
+                                ];
+                                
+                                for (let filterIndex = 0; filterIndex < fallbackApproaches.length; filterIndex++) {
+                                    const filter = fallbackApproaches[filterIndex];
+                                    try {
+                                        console.log(`Trying filter approach ${filterIndex + 1}: ${filter}`);
+                                        
+                                        let fallbackCommand;
+                                        if (filterIndex === 0 || filterIndex === 1) {
+                                            // Two-input methods need special handling
+                                            const filterComplex = filterIndex === 0 
+                                                ? `[1:v]scale=${width}:${height}:force_original_aspect_ratio=decrease:flags=lanczos[scaled];[0:v][scaled]overlay=(W-w)/2:(H-h)/2`
+                                                : `[1:v]scale=${width}:${height}:force_original_aspect_ratio=increase:flags=lanczos[scaled];[scaled]crop=${width}:${height}[cropped];[0:v][cropped]overlay=(W-w)/2:(H-h)/2`;
+                                            
+                                            fallbackCommand = [
+                                                '-f', 'lavfi',
+                                                '-i', `color=${fallbackColor}:size=${width}x${height}`,
+                                                '-i', inputFileName,
+                                                '-filter_complex', filterComplex,
+                                                '-pix_fmt', 'yuv420p',
+                                                '-q:v', '2',
+                                                '-y',
+                                                `output${i}.jpg`
+                                            ];
+                                        } else {
+                                            // Standard single-input method
+                                            fallbackCommand = [
+                                                '-i', inputFileName,
+                                                '-vf', filter,
+                                                '-pix_fmt', 'yuv420p',
+                                                '-q:v', '2',
+                                                '-y',
+                                                `output${i}.jpg`
+                                            ];
+                                        }
+                                        
+                                        console.log('Fallback command:', fallbackCommand);
+                                        await ffmpeg.run(...fallbackCommand);
+                                        console.log('Fallback conversion completed with color:', fallbackColor, 'and approach:', filterIndex + 1);
+                                        fallbackSuccess = true;
+                                        break;
+                                    } catch (filterError) {
+                                        console.log(`Filter approach ${filterIndex + 1} failed:`, filterError.message);
+                                        continue;
+                                    }
+                                }
+                                
+                                if (fallbackSuccess) break;
+                                
+                            } catch (fallbackError) {
+                                console.log(`Fallback with color ${fallbackColor} failed:`, fallbackError.message);
+                                continue;
+                            }
+                        }
+                        
+                        if (!fallbackSuccess) {
+                            throw new Error('All fallback transparency handling methods failed');
+                        }
+                    }
                     
                     // Read the output file
                     console.log('Reading output file...');

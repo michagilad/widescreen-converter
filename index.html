@@ -56,7 +56,7 @@
                         <input type="number" id="height" value="1080" min="1" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">Background Color</label>
+                                                    <label class="block text-sm font-medium text-gray-700 mb-2">Background Color (fills transparent areas)</label>
                         <div class="color-picker-wrapper">
                             <div class="flex gap-2">
                                 <input type="color" id="bgColor" value="#000000" class="w-1/3 h-10 border border-gray-300 rounded-md">
@@ -75,7 +75,9 @@
                             <option value="fit">Fit (maintain aspect ratio, add background)</option>
                             <option value="fill">Fill (maintain aspect ratio, crop excess)</option>
                         </select>
-                        <p class="text-xs text-gray-500 mt-1">Fit: scales to fit dimensions, Fill: scales to fill dimensions</p>
+                                                    <p class="text-xs text-gray-500 mt-1">Fit: scales to fit dimensions, Fill: scales to fill dimensions</p>
+                            <p class="text-xs text-gray-500 mt-1">Transparent areas in PNG files will be filled with the background color</p>
+                            <p class="text-xs text-gray-500 mt-1">💡 Try different background colors (red, blue, green) to test transparency handling</p>
                     </div>
                 </div>
             </div>
