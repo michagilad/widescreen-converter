@@ -15,6 +15,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const heightInput = document.getElementById('height');
     const bgColorInput = document.getElementById('bgColor');
     const hexInput = document.getElementById('hexInput');
+    const scalingModeSelect = document.getElementById('scalingMode');
 
     let files = [];
     let processedImages = [];
@@ -152,7 +153,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             const bgColor = bgColorInput.value;
             const bgColorValue = bgColor.replace('#', '0x') + 'ff';
             
-            console.log('Starting conversion with settings:', { width, height, bgColor, bgColorValue });
+            const scalingMode = scalingModeSelect.value;
+            console.log('Starting conversion with settings:', { width, height, bgColor, bgColorValue, scalingMode });
             console.log('Number of files to process:', files.length);
             
             processedImages = [];
@@ -194,27 +196,53 @@ document.addEventListener('DOMContentLoaded', async () => {
                         `output${i}.jpg`
                     ];
                     
-                    // Enhanced command for better transparency handling
-                    const enhancedCommand = [
-                        '-i', inputFileName,
-                        '-vf', [
-                            // Scale the image to fit within target dimensions while maintaining aspect ratio
-                            `scale=${width}:${height}:force_original_aspect_ratio=decrease:flags=lanczos`,
-                            // Pad to exact dimensions with background color (this fills transparency)
-                            `pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:color=${bgColorValue}`,
-                            // Ensure any remaining alpha/transparency is filled
-                            `format=yuv420p`
-                        ].join(','),
-                        // Force output to JPG (which doesn't support transparency)
-                        '-pix_fmt', 'yuv420p',
-                        // High quality output
-                        '-q:v', '2',
-                        // Overwrite output file
-                        '-y',
-                        `output${i}.jpg`
-                    ];
+                    // Get scaling mode and build appropriate FFmpeg command
+                    const scalingMode = scalingModeSelect.value;
+                    let enhancedCommand;
                     
-                    console.log('Running enhanced FFmpeg command for transparency handling:', enhancedCommand);
+                    if (scalingMode === 'fit') {
+                        // Fit mode: scale to fit within dimensions, pad with background color
+                        enhancedCommand = [
+                            '-i', inputFileName,
+                            '-vf', [
+                                // Scale the image to fit within target dimensions while maintaining aspect ratio
+                                `scale=${width}:${height}:force_original_aspect_ratio=decrease:flags=lanczos`,
+                                // Pad to exact dimensions with background color (this fills transparency)
+                                `pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:color=${bgColorValue}`,
+                                // Ensure any remaining alpha/transparency is filled
+                                `format=yuv420p`
+                            ].join(','),
+                            // Force output to JPG (which doesn't support transparency)
+                            '-pix_fmt', 'yuv420p',
+                            // High quality output
+                            '-q:v', '2',
+                            // Overwrite output file
+                            '-y',
+                            `output${i}.jpg`
+                        ];
+                    } else {
+                        // Fill mode: scale to fill dimensions, crop excess parts
+                        enhancedCommand = [
+                            '-i', inputFileName,
+                            '-vf', [
+                                // Scale the image to fill target dimensions while maintaining aspect ratio
+                                `scale=${width}:${height}:force_original_aspect_ratio=increase:flags=lanczos`,
+                                // Crop to exact dimensions from center
+                                `crop=${width}:${height}`,
+                                // Ensure any remaining alpha/transparency is filled
+                                `format=yuv420p`
+                            ].join(','),
+                            // Force output to JPG (which doesn't support transparency)
+                            '-pix_fmt', 'yuv420p',
+                            // High quality output
+                            '-q:v', '2',
+                            // Overwrite output file
+                            '-y',
+                            `output${i}.jpg`
+                        ];
+                    }
+                    
+                    console.log(`Running FFmpeg command for ${scalingMode} mode:`, enhancedCommand);
                     await ffmpeg.run(...enhancedCommand);
                     console.log('FFmpeg conversion completed');
                     
