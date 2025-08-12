@@ -14,9 +14,38 @@ document.addEventListener('DOMContentLoaded', async () => {
     const widthInput = document.getElementById('width');
     const heightInput = document.getElementById('height');
     const bgColorInput = document.getElementById('bgColor');
+    const hexInput = document.getElementById('hexInput');
 
     let files = [];
     let processedImages = [];
+
+    // Initialize color picker functionality
+    function initializeColorPicker() {
+        // Update hex input when picker changes
+        bgColorInput.addEventListener('input', (e) => {
+            const hex = e.target.value;
+            hexInput.value = hex;
+        });
+
+        // Allow direct hex input
+        hexInput.addEventListener('input', (e) => {
+            const hex = e.target.value;
+            if (/^#[0-9A-Fa-f]{3,6}$/.test(hex)) {
+                // Convert 3-digit hex to 6-digit for the color picker, but leave input unchanged
+                if (hex.length === 4) { // #fff -> convert color picker to #ffffff
+                    const fullHex = '#' + hex[1] + hex[1] + hex[2] + hex[2] + hex[3] + hex[3];
+                    bgColorInput.value = fullHex;
+                } else if (hex.length === 7) { // #fefefe - full 6-digit hex
+                    bgColorInput.value = hex;
+                }
+            }
+        });
+
+        // Initialize hex input with current color
+        hexInput.value = bgColorInput.value;
+    }
+
+
 
     // Initialize FFmpeg
     let ffmpeg;
@@ -48,6 +77,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         status.classList.remove('hidden');
         status.classList.add('bg-red-50', 'border-red-200');
     }
+
+    // Initialize color picker
+    initializeColorPicker();
 
     // File handling
     dropzone.addEventListener('click', () => fileInput.click());
