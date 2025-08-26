@@ -82,27 +82,45 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Initialize color picker
     initializeColorPicker();
 
-    // File handling
-    dropzone.addEventListener('click', () => fileInput.click());
+    // Debug DOM elements
+    console.log('Setting up file handling event listeners...');
+    console.log('Dropzone element:', dropzone);
+    console.log('File input element:', fileInput);
     
-    dropzone.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        dropzone.classList.add('dragover');
-    });
-    
-    dropzone.addEventListener('dragleave', () => {
-        dropzone.classList.remove('dragover');
-    });
-    
-    dropzone.addEventListener('drop', (e) => {
-        e.preventDefault();
-        dropzone.classList.remove('dragover');
-        handleFiles(e.dataTransfer.files);
-    });
-    
-    fileInput.addEventListener('change', (e) => {
-        handleFiles(e.target.files);
-    });
+    if (dropzone) {
+        // File handling
+        dropzone.addEventListener('click', () => {
+            console.log('Dropzone clicked, opening file dialog...');
+            fileInput.click();
+        });
+        
+        dropzone.addEventListener('dragover', (e) => {
+            console.log('Drag over detected');
+            e.preventDefault();
+            dropzone.classList.add('dragover');
+        });
+        
+        dropzone.addEventListener('dragleave', (e) => {
+            console.log('Drag leave detected');
+            dropzone.classList.remove('dragover');
+        });
+        
+        dropzone.addEventListener('drop', (e) => {
+            console.log('File drop detected:', e.dataTransfer.files);
+            e.preventDefault();
+            dropzone.classList.remove('dragover');
+            handleFiles(e.dataTransfer.files);
+        });
+        
+        fileInput.addEventListener('change', (e) => {
+            console.log('File input change detected:', e.target.files);
+            handleFiles(e.target.files);
+        });
+        
+        console.log('File handling event listeners set up successfully');
+    } else {
+        console.error('Cannot set up file handling - dropzone element not found');
+    }
 
     function handleFiles(fileList) {
         files = Array.from(fileList);
@@ -270,50 +288,52 @@ document.addEventListener('DOMContentLoaded', async () => {
                         // For non-transparent files, use standard approach
                         console.log('Using standard conversion for non-transparent file');
                         
-                        if (scalingMode === 'fit') {
-                            // Fit mode: scale to fit within dimensions, pad with background color
-                            enhancedCommand = [
-                                '-i', inputFileName,
-                                '-vf', [
-                                    // Scale the image to fit within target dimensions while maintaining aspect ratio
-                                    `scale=${width}:${height}:force_original_aspect_ratio=decrease:flags=lanczos`,
-                                    // Pad to exact dimensions with background color (this fills transparency)
-                                    `pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:color=${bgColorValue}`,
-                                    // Ensure any remaining alpha/transparency is filled
-                                    `format=yuv420p`
-                                ].join(','),
-                                // Force output to JPG (which doesn't support transparency)
-                                '-pix_fmt', 'yuv420p',
-                                // High quality output
-                                '-q:v', '2',
-                                // Overwrite output file
-                                '-y',
-                                `output${i}.jpg`
-                            ];
-                        } else {
-                            // Fill mode: scale to fill dimensions, crop excess parts
-                            enhancedCommand = [
-                                '-i', inputFileName,
-                                '-vf', [
-                                    // Scale the image to fill target dimensions while maintaining aspect ratio
-                                    `scale=${width}:${height}:force_original_aspect_ratio=increase:flags=lanczos`,
-                                    // Crop to exact dimensions from center
-                                    `crop=${width}:${height}`,
-                                    // Ensure any remaining alpha/transparency is filled
-                                    `format=yuv420p`
-                                ].join(','),
-                                // Force output to JPG (which doesn't support transparency)
-                                '-pix_fmt', 'yuv420p',
-                                // High quality output
-                                '-q:v', '2',
-                                // Overwrite output file
-                                '-y',
-                                `output${i}.jpg`
-                            ];
-                        }
+                                            if (scalingMode === 'fit') {
+                        // Fit mode: scale to fit within dimensions, pad with background color
+                        enhancedCommand = [
+                            '-i', inputFileName,
+                            '-vf', [
+                                // Scale the image to fit within target dimensions while maintaining aspect ratio
+                                `scale=${width}:${height}:force_original_aspect_ratio=decrease:flags=lanczos`,
+                                // Pad to exact dimensions with background color (this fills transparency)
+                                `pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:color=${bgColorValue}`,
+                                // Ensure proper color space conversion
+                                'format=yuv420p'
+                            ].join(','),
+                            // Color profile and quality settings for consistency
+                            '-pix_fmt', 'yuv420p',
+                            '-colorspace', 'bt709',        // Standard color space
+                            '-color_primaries', 'bt709',   // Standard primaries
+                            '-color_trc', 'bt709',        // Standard transfer characteristics
+                            '-q:v', '2',                  // High quality
+                            '-y',
+                            `output${i}.jpg`
+                        ];
+                    } else {
+                        // Fill mode: scale to fill dimensions, crop excess parts
+                        enhancedCommand = [
+                            '-i', inputFileName,
+                            '-vf', [
+                                // Scale the image to fill target dimensions while maintaining aspect ratio
+                                `scale=${width}:${height}:force_original_aspect_ratio=increase:flags=lanczos`,
+                                // Crop to exact dimensions from center
+                                `crop=${width}:${height}`,
+                                // Ensure proper color space conversion
+                                'format=yuv420p'
+                            ].join(','),
+                            // Color profile and quality settings for consistency
+                            '-pix_fmt', 'yuv420p',
+                            '-colorspace', 'bt709',        // Standard color space
+                            '-color_primaries', 'bt709',   // Standard primaries
+                            '-color_trc', 'bt709',        // Standard transfer characteristics
+                            '-q:v', '2',                  // High quality
+                            '-y',
+                            `output${i}.jpg`
+                        ];
+                    }
                     }
                     
-                    console.log(`Running FFmpeg command for ${scalingMode} mode:`, enhancedCommand);
+                    console.log(`Running FFmpeg command for ${scalingMode} mode with color profile preservation:`, enhancedCommand);
                     console.log('Background color being used:', bgColor, '-> FFmpeg format:', bgColorValue);
                     console.log('🎨 Available color formats:', bgColorFormats);
                     console.log('🔧 Full FFmpeg command:', enhancedCommand.join(' '));
