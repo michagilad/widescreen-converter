@@ -182,6 +182,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             
             const scalingMode = scalingModeSelect.value;
             console.log('Starting conversion with settings:', { width, height, bgColor, bgColorValue, scalingMode });
+            
+            // Log safe zone calculation for debugging
+            if (scalingMode === 'safe') {
+                const safeZoneSize = Math.min(width, height);
+                console.log('1x1 Safe Zone mode selected - safe zone size:', safeZoneSize);
+                console.log('Image will be scaled to fit within', safeZoneSize, 'x', safeZoneSize, 'and centered on', width, 'x', height, 'background');
+            }
+            
             console.log('Number of files to process:', files.length);
             
             processedImages = [];
@@ -259,6 +267,34 @@ document.addEventListener('DOMContentLoaded', async () => {
                                 '-y',
                                 `output${i}.jpg`
                             ];
+                        } else if (scalingMode === 'safe') {
+                            // 1x1 Safe Zone mode: ensure image is no wider than 1:1, centered on 16:9 background
+                            console.log('Using 1x1 Safe Zone mode for PNG file');
+                            
+                            // Calculate the maximum dimension for 1:1 safe zone
+                            // For 1920x1080, the safe zone would be 1080x1080 (height becomes the limiting factor)
+                            const safeZoneSize = Math.min(width, height);
+                            
+                            enhancedCommand = [
+                                // Create a solid background color
+                                '-f', 'lavfi',
+                                '-i', `color=${bgColorFormats[0]}:size=${width}x${height}`,
+                                // Input the actual image
+                                '-i', inputFileName,
+                                '-filter_complex', [
+                                    // Scale the image to fit within the safe zone (1:1) while maintaining aspect ratio
+                                    `[1:v]scale=${safeZoneSize}:${safeZoneSize}:force_original_aspect_ratio=decrease:flags=lanczos[scaled]`,
+                                    // Overlay the scaled image centered on the 16:9 background
+                                    `[0:v][scaled]overlay=(W-w)/2:(H-h)/2`
+                                ].join(';'),
+                                // Force output to JPG
+                                '-pix_fmt', 'yuv420p',
+                                // High quality output
+                                '-q:v', '2',
+                                // Overwrite output file
+                                '-y',
+                                `output${i}.jpg`
+                            ];
                         } else {
                             // Fill mode: scale to fill dimensions, crop excess parts
                             enhancedCommand = [
@@ -288,49 +324,76 @@ document.addEventListener('DOMContentLoaded', async () => {
                         // For non-transparent files, use standard approach
                         console.log('Using standard conversion for non-transparent file');
                         
-                                            if (scalingMode === 'fit') {
-                        // Fit mode: scale to fit within dimensions, pad with background color
-                        enhancedCommand = [
-                            '-i', inputFileName,
-                            '-vf', [
-                                // Scale the image to fit within target dimensions while maintaining aspect ratio
-                                `scale=${width}:${height}:force_original_aspect_ratio=decrease:flags=lanczos`,
-                                // Pad to exact dimensions with background color (this fills transparency)
-                                `pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:color=${bgColorValue}`,
-                                // Ensure proper color space conversion
-                                'format=yuv420p'
-                            ].join(','),
-                            // Color profile and quality settings for consistency
-                            '-pix_fmt', 'yuv420p',
-                            '-colorspace', 'bt709',        // Standard color space
-                            '-color_primaries', 'bt709',   // Standard primaries
-                            '-color_trc', 'bt709',        // Standard transfer characteristics
-                            '-q:v', '2',                  // High quality
-                            '-y',
-                            `output${i}.jpg`
-                        ];
-                    } else {
-                        // Fill mode: scale to fill dimensions, crop excess parts
-                        enhancedCommand = [
-                            '-i', inputFileName,
-                            '-vf', [
-                                // Scale the image to fill target dimensions while maintaining aspect ratio
-                                `scale=${width}:${height}:force_original_aspect_ratio=increase:flags=lanczos`,
-                                // Crop to exact dimensions from center
-                                `crop=${width}:${height}`,
-                                // Ensure proper color space conversion
-                                'format=yuv420p'
-                            ].join(','),
-                            // Color profile and quality settings for consistency
-                            '-pix_fmt', 'yuv420p',
-                            '-colorspace', 'bt709',        // Standard color space
-                            '-color_primaries', 'bt709',   // Standard primaries
-                            '-color_trc', 'bt709',        // Standard transfer characteristics
-                            '-q:v', '2',                  // High quality
-                            '-y',
-                            `output${i}.jpg`
-                        ];
-                    }
+                        if (scalingMode === 'fit') {
+                            // Fit mode: scale to fit within dimensions, pad with background color
+                            enhancedCommand = [
+                                '-i', inputFileName,
+                                '-vf', [
+                                    // Scale the image to fit within target dimensions while maintaining aspect ratio
+                                    `scale=${width}:${height}:force_original_aspect_ratio=decrease:flags=lanczos`,
+                                    // Pad to exact dimensions with background color (this fills transparency)
+                                    `pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:color=${bgColorValue}`,
+                                    // Ensure proper color space conversion
+                                    'format=yuv420p'
+                                ].join(','),
+                                // Color profile and quality settings for consistency
+                                '-pix_fmt', 'yuv420p',
+                                '-colorspace', 'bt709',        // Standard color space
+                                '-color_primaries', 'bt709',   // Standard primaries
+                                '-color_trc', 'bt709',        // Standard transfer characteristics
+                                '-q:v', '2',                  // High quality
+                                '-y',
+                                `output${i}.jpg`
+                            ];
+                        } else if (scalingMode === 'safe') {
+                            // 1x1 Safe Zone mode: ensure image is no wider than 1:1, centered on 16:9 background
+                            console.log('Using 1x1 Safe Zone mode for non-transparent file');
+                            
+                            // Calculate the maximum dimension for 1:1 safe zone
+                            // For 1920x1080, the safe zone would be 1080x1080 (height becomes the limiting factor)
+                            const safeZoneSize = Math.min(width, height);
+                            
+                            enhancedCommand = [
+                                '-i', inputFileName,
+                                '-vf', [
+                                    // Scale the image to fit within the safe zone (1:1) while maintaining aspect ratio
+                                    `scale=${safeZoneSize}:${safeZoneSize}:force_original_aspect_ratio=decrease:flags=lanczos`,
+                                    // Pad to exact dimensions with background color, centering the image
+                                    `pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:color=${bgColorValue}`,
+                                    // Ensure proper color space conversion
+                                    'format=yuv420p'
+                                ].join(','),
+                                // Color profile and quality settings for consistency
+                                '-pix_fmt', 'yuv420p',
+                                '-colorspace', 'bt709',        // Standard color space
+                                '-color_primaries', 'bt709',   // Standard primaries
+                                '-color_trc', 'bt709',        // Standard transfer characteristics
+                                '-q:v', '2',                  // High quality
+                                '-y',
+                                `output${i}.jpg`
+                            ];
+                        } else {
+                            // Fill mode: scale to fill dimensions, crop excess parts
+                            enhancedCommand = [
+                                '-i', inputFileName,
+                                '-vf', [
+                                    // Scale the image to fill target dimensions while maintaining aspect ratio
+                                    `scale=${width}:${height}:force_original_aspect_ratio=increase:flags=lanczos`,
+                                    // Crop to exact dimensions from center
+                                    `crop=${width}:${height}`,
+                                    // Ensure proper color space conversion
+                                    'format=yuv420p'
+                                ].join(','),
+                                // Color profile and quality settings for consistency
+                                '-pix_fmt', 'yuv420p',
+                                '-colorspace', 'bt709',        // Standard color space
+                                '-color_primaries', 'bt709',   // Standard primaries
+                                '-color_trc', 'bt709',        // Standard transfer characteristics
+                                '-q:v', '2',                  // High quality
+                                '-y',
+                                `output${i}.jpg`
+                            ];
+                        }
                     }
                     
                     console.log(`Running FFmpeg command for ${scalingMode} mode with color profile preservation:`, enhancedCommand);
@@ -363,9 +426,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                                     `-f lavfi -i color=${fallbackColor}:size=${width}x${height} -i ${inputFileName} -filter_complex [1:v]scale=${width}:${height}:force_original_aspect_ratio=decrease:flags=lanczos[scaled];[0:v][scaled]overlay=(W-w)/2:(H-h)/2`,
                                     // Approach 2: Two-input method with solid background (fill mode)
                                     `-f lavfi -i color=${fallbackColor}:size=${width}x${height} -i ${inputFileName} -filter_complex [1:v]scale=${width}:${height}:force_original_aspect_ratio=increase:flags=lanczos[scaled];[scaled]crop=${width}:${height}[cropped];[0:v][cropped]overlay=(W-w)/2:(H-h)/2`,
-                                    // Approach 3: Standard pad with color
+                                    // Approach 3: Two-input method with solid background (safe mode)
+                                    `-f lavfi -i color=${fallbackColor}:size=${width}x${height} -i ${inputFileName} -filter_complex [1:v]scale=${Math.min(width, height)}:${Math.min(width, height)}:force_original_aspect_ratio=decrease:flags=lanczos[scaled];[0:v][scaled]overlay=(W-w)/2:(H-h)/2`,
+                                    // Approach 4: Standard pad with color
                                     `scale=${width}:${height}:force_original_aspect_ratio=decrease:flags=lanczos,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:color=${fallbackColor}`,
-                                    // Approach 4: Use geq filter to create solid background
+                                    // Approach 5: Use geq filter to create solid background
                                     `scale=${width}:${height}:force_original_aspect_ratio=decrease:flags=lanczos,geq=r=${fallbackColor}:g=${fallbackColor}:b=${fallbackColor}`
                                 ];
                                 
@@ -375,11 +440,20 @@ document.addEventListener('DOMContentLoaded', async () => {
                                         console.log(`Trying filter approach ${filterIndex + 1}: ${filter}`);
                                         
                                         let fallbackCommand;
-                                        if (filterIndex === 0 || filterIndex === 1) {
+                                        if (filterIndex === 0 || filterIndex === 1 || filterIndex === 2) {
                                             // Two-input methods need special handling
-                                            const filterComplex = filterIndex === 0 
-                                                ? `[1:v]scale=${width}:${height}:force_original_aspect_ratio=decrease:flags=lanczos[scaled];[0:v][scaled]overlay=(W-w)/2:(H-h)/2`
-                                                : `[1:v]scale=${width}:${height}:force_original_aspect_ratio=increase:flags=lanczos[scaled];[scaled]crop=${width}:${height}[cropped];[0:v][cropped]overlay=(W-w)/2:(H-h)/2`;
+                                            let filterComplex;
+                                            if (filterIndex === 0) {
+                                                // Fit mode
+                                                filterComplex = `[1:v]scale=${width}:${height}:force_original_aspect_ratio=decrease:flags=lanczos[scaled];[0:v][scaled]overlay=(W-w)/2:(H-h)/2`;
+                                            } else if (filterIndex === 1) {
+                                                // Fill mode
+                                                filterComplex = `[1:v]scale=${width}:${height}:force_original_aspect_ratio=increase:flags=lanczos[scaled];[scaled]crop=${width}:${height}[cropped];[0:v][cropped]overlay=(W-w)/2:(H-h)/2`;
+                                            } else {
+                                                // Safe mode
+                                                const safeZoneSize = Math.min(width, height);
+                                                filterComplex = `[1:v]scale=${safeZoneSize}:${safeZoneSize}:force_original_aspect_ratio=decrease:flags=lanczos[scaled];[0:v][scaled]overlay=(W-w)/2:(H-h)/2`;
+                                            }
                                             
                                             fallbackCommand = [
                                                 '-f', 'lavfi',
