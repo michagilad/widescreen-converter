@@ -16,6 +16,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     const bgColorInput = document.getElementById('bgColor');
     const hexInput = document.getElementById('hexInput');
     const scalingModeSelect = document.getElementById('scalingMode');
+    const aspectRatioContainer = document.getElementById('aspectRatioContainer');
+    const aspectRatioInput = document.getElementById('aspectRatio');
 
     let files = [];
     let processedImages = [];
@@ -81,6 +83,76 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Initialize color picker
     initializeColorPicker();
+
+    // Initialize aspect ratio functionality
+    function initializeAspectRatio() {
+        // Show/hide aspect ratio field based on scaling mode
+        function toggleAspectRatioField() {
+            if (scalingModeSelect.value === 'custom') {
+                aspectRatioContainer.classList.remove('hidden');
+            } else {
+                aspectRatioContainer.classList.add('hidden');
+            }
+        }
+
+        // Validate aspect ratio input
+        function validateAspectRatio(value) {
+            const pattern = /^\d+\/\d+$/;
+            if (!pattern.test(value)) {
+                return false;
+            }
+            
+            const [width, height] = value.split('/').map(Number);
+            return width > 0 && height > 0;
+        }
+
+        // Add event listeners
+        scalingModeSelect.addEventListener('change', toggleAspectRatioField);
+        
+        aspectRatioInput.addEventListener('input', (e) => {
+            const value = e.target.value;
+            if (value && !validateAspectRatio(value)) {
+                e.target.setCustomValidity('Please enter a valid aspect ratio (e.g., 1/1, 5/6)');
+            } else {
+                e.target.setCustomValidity('');
+            }
+        });
+
+        // Initialize the field visibility
+        toggleAspectRatioField();
+    }
+
+    // Initialize aspect ratio functionality
+    initializeAspectRatio();
+
+    // Helper function to calculate safe zone dimensions
+    function calculateSafeZoneDimensions(targetWidth, targetHeight, aspectRatio) {
+        const [ratioWidth, ratioHeight] = aspectRatio.split('/').map(Number);
+        const aspectRatioValue = ratioWidth / ratioHeight;
+        
+        // Calculate the maximum dimensions that fit within the target while maintaining the aspect ratio
+        const maxWidth = targetWidth;
+        const maxHeight = targetHeight;
+        
+        // Calculate dimensions that fit within the target area
+        let safeWidth, safeHeight;
+        
+        if (aspectRatioValue > (maxWidth / maxHeight)) {
+            // Aspect ratio is wider than target - width is the limiting factor
+            safeWidth = maxWidth;
+            safeHeight = maxWidth / aspectRatioValue;
+        } else {
+            // Aspect ratio is taller than target - height is the limiting factor
+            safeHeight = maxHeight;
+            safeWidth = maxHeight * aspectRatioValue;
+        }
+        
+        return {
+            width: Math.floor(safeWidth),
+            height: Math.floor(safeHeight),
+            aspectRatio: aspectRatioValue
+        };
+    }
 
     // Debug DOM elements
     console.log('Setting up file handling event listeners...');
@@ -188,6 +260,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const safeZoneSize = Math.min(width, height);
                 console.log('1x1 Safe Zone mode selected - safe zone size:', safeZoneSize);
                 console.log('Image will be scaled to fit within', safeZoneSize, 'x', safeZoneSize, 'and centered on', width, 'x', height, 'background');
+            } else if (scalingMode === 'custom') {
+                const aspectRatio = aspectRatioInput.value;
+                const customDimensions = calculateSafeZoneDimensions(width, height, aspectRatio);
+                console.log('Custom aspect ratio mode selected - aspect ratio:', aspectRatio);
+                console.log('Custom dimensions:', customDimensions);
+                console.log('Image will be cropped to', customDimensions.width, 'x', customDimensions.height, 'and centered on', width, 'x', height, 'background');
             }
             
             console.log('Number of files to process:', files.length);
@@ -272,7 +350,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                             console.log('Using 1x1 Safe Zone mode for PNG file');
                             
                             // Calculate the maximum dimension for 1:1 safe zone
-                            // For 1920x1080, the safe zone would be 1080x1080 (height becomes the limiting factor)
                             const safeZoneSize = Math.min(width, height);
                             
                             enhancedCommand = [
@@ -286,6 +363,36 @@ document.addEventListener('DOMContentLoaded', async () => {
                                     `[1:v]scale=${safeZoneSize}:${safeZoneSize}:force_original_aspect_ratio=decrease:flags=lanczos[scaled]`,
                                     // Overlay the scaled image centered on the 16:9 background
                                     `[0:v][scaled]overlay=(W-w)/2:(H-h)/2`
+                                ].join(';'),
+                                // Force output to JPG
+                                '-pix_fmt', 'yuv420p',
+                                // High quality output
+                                '-q:v', '2',
+                                // Overwrite output file
+                                '-y',
+                                `output${i}.jpg`
+                            ];
+                        } else if (scalingMode === 'custom') {
+                            // Custom aspect ratio mode: crop image to exact specified aspect ratio
+                            console.log('Using Custom aspect ratio mode for PNG file');
+                            
+                            // Calculate the custom dimensions based on aspect ratio
+                            const aspectRatio = aspectRatioInput.value;
+                            const customDimensions = calculateSafeZoneDimensions(width, height, aspectRatio);
+                            
+                            enhancedCommand = [
+                                // Create a solid background color
+                                '-f', 'lavfi',
+                                '-i', `color=${bgColorFormats[0]}:size=${width}x${height}`,
+                                // Input the actual image
+                                '-i', inputFileName,
+                                '-filter_complex', [
+                                    // Scale the image to fill the custom dimensions, then crop to exact aspect ratio
+                                    `[1:v]scale=${customDimensions.width}:${customDimensions.height}:force_original_aspect_ratio=increase:flags=lanczos[scaled]`,
+                                    // Crop to exact custom dimensions from center
+                                    `[scaled]crop=${customDimensions.width}:${customDimensions.height}[cropped]`,
+                                    // Overlay the cropped image centered on the background
+                                    `[0:v][cropped]overlay=(W-w)/2:(H-h)/2`
                                 ].join(';'),
                                 // Force output to JPG
                                 '-pix_fmt', 'yuv420p',
@@ -350,7 +457,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                             console.log('Using 1x1 Safe Zone mode for non-transparent file');
                             
                             // Calculate the maximum dimension for 1:1 safe zone
-                            // For 1920x1080, the safe zone would be 1080x1080 (height becomes the limiting factor)
                             const safeZoneSize = Math.min(width, height);
                             
                             enhancedCommand = [
@@ -358,6 +464,35 @@ document.addEventListener('DOMContentLoaded', async () => {
                                 '-vf', [
                                     // Scale the image to fit within the safe zone (1:1) while maintaining aspect ratio
                                     `scale=${safeZoneSize}:${safeZoneSize}:force_original_aspect_ratio=decrease:flags=lanczos`,
+                                    // Pad to exact dimensions with background color, centering the image
+                                    `pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:color=${bgColorValue}`,
+                                    // Ensure proper color space conversion
+                                    'format=yuv420p'
+                                ].join(','),
+                                // Color profile and quality settings for consistency
+                                '-pix_fmt', 'yuv420p',
+                                '-colorspace', 'bt709',        // Standard color space
+                                '-color_primaries', 'bt709',   // Standard primaries
+                                '-color_trc', 'bt709',        // Standard transfer characteristics
+                                '-q:v', '2',                  // High quality
+                                '-y',
+                                `output${i}.jpg`
+                            ];
+                        } else if (scalingMode === 'custom') {
+                            // Custom aspect ratio mode: crop image to exact specified aspect ratio
+                            console.log('Using Custom aspect ratio mode for non-transparent file');
+                            
+                            // Calculate the custom dimensions based on aspect ratio
+                            const aspectRatio = aspectRatioInput.value;
+                            const customDimensions = calculateSafeZoneDimensions(width, height, aspectRatio);
+                            
+                            enhancedCommand = [
+                                '-i', inputFileName,
+                                '-vf', [
+                                    // Scale the image to fill the custom dimensions, then crop to exact aspect ratio
+                                    `scale=${customDimensions.width}:${customDimensions.height}:force_original_aspect_ratio=increase:flags=lanczos`,
+                                    // Crop to exact custom dimensions from center
+                                    `crop=${customDimensions.width}:${customDimensions.height}`,
                                     // Pad to exact dimensions with background color, centering the image
                                     `pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:color=${bgColorValue}`,
                                     // Ensure proper color space conversion
@@ -415,6 +550,16 @@ document.addEventListener('DOMContentLoaded', async () => {
                         // Try different background color formats
                         const fallbackColors = bgColorFormats;
                         
+                        // Calculate dimensions for fallback approaches based on scaling mode
+                        let fallbackDimensions;
+                        if (scalingMode === 'safe') {
+                            const safeZoneSize = Math.min(width, height);
+                            fallbackDimensions = { width: safeZoneSize, height: safeZoneSize };
+                        } else if (scalingMode === 'custom') {
+                            const aspectRatio = aspectRatioInput.value;
+                            fallbackDimensions = calculateSafeZoneDimensions(width, height, aspectRatio);
+                        }
+                        
                         let fallbackSuccess = false;
                         for (const fallbackColor of fallbackColors) {
                             try {
@@ -426,8 +571,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                                     `-f lavfi -i color=${fallbackColor}:size=${width}x${height} -i ${inputFileName} -filter_complex [1:v]scale=${width}:${height}:force_original_aspect_ratio=decrease:flags=lanczos[scaled];[0:v][scaled]overlay=(W-w)/2:(H-h)/2`,
                                     // Approach 2: Two-input method with solid background (fill mode)
                                     `-f lavfi -i color=${fallbackColor}:size=${width}x${height} -i ${inputFileName} -filter_complex [1:v]scale=${width}:${height}:force_original_aspect_ratio=increase:flags=lanczos[scaled];[scaled]crop=${width}:${height}[cropped];[0:v][cropped]overlay=(W-w)/2:(H-h)/2`,
-                                    // Approach 3: Two-input method with solid background (safe mode)
-                                    `-f lavfi -i color=${fallbackColor}:size=${width}x${height} -i ${inputFileName} -filter_complex [1:v]scale=${Math.min(width, height)}:${Math.min(width, height)}:force_original_aspect_ratio=decrease:flags=lanczos[scaled];[0:v][scaled]overlay=(W-w)/2:(H-h)/2`,
+                                    // Approach 3: Two-input method with solid background (safe/custom mode)
+                                    `-f lavfi -i color=${fallbackColor}:size=${width}x${height} -i ${inputFileName} -filter_complex [1:v]scale=${fallbackDimensions.width}:${fallbackDimensions.height}:force_original_aspect_ratio=${scalingMode === 'safe' ? 'decrease' : 'increase'}:flags=lanczos[scaled]${scalingMode === 'custom' ? ';[scaled]crop=' + fallbackDimensions.width + ':' + fallbackDimensions.height + '[cropped];[0:v][cropped]overlay=(W-w)/2:(H-h)/2' : ';[0:v][scaled]overlay=(W-w)/2:(H-h)/2'}`,
                                     // Approach 4: Standard pad with color
                                     `scale=${width}:${height}:force_original_aspect_ratio=decrease:flags=lanczos,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:color=${fallbackColor}`,
                                     // Approach 5: Use geq filter to create solid background
@@ -450,9 +595,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                                                 // Fill mode
                                                 filterComplex = `[1:v]scale=${width}:${height}:force_original_aspect_ratio=increase:flags=lanczos[scaled];[scaled]crop=${width}:${height}[cropped];[0:v][cropped]overlay=(W-w)/2:(H-h)/2`;
                                             } else {
-                                                // Safe mode
-                                                const safeZoneSize = Math.min(width, height);
-                                                filterComplex = `[1:v]scale=${safeZoneSize}:${safeZoneSize}:force_original_aspect_ratio=decrease:flags=lanczos[scaled];[0:v][scaled]overlay=(W-w)/2:(H-h)/2`;
+                                                // Safe/Custom mode
+                                                if (scalingMode === 'safe') {
+                                                    filterComplex = `[1:v]scale=${fallbackDimensions.width}:${fallbackDimensions.height}:force_original_aspect_ratio=decrease:flags=lanczos[scaled];[0:v][scaled]overlay=(W-w)/2:(H-h)/2`;
+                                                } else {
+                                                    filterComplex = `[1:v]scale=${fallbackDimensions.width}:${fallbackDimensions.height}:force_original_aspect_ratio=increase:flags=lanczos[scaled];[scaled]crop=${fallbackDimensions.width}:${fallbackDimensions.height}[cropped];[0:v][cropped]overlay=(W-w)/2:(H-h)/2`;
+                                                }
                                             }
                                             
                                             fallbackCommand = [
