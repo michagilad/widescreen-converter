@@ -657,7 +657,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                     const blob = new Blob([data.buffer], { type: 'image/jpeg' });
                     const url = URL.createObjectURL(blob);
                     
-                    const resultName = files[i].name.replace(/\.[^/.]+$/, '') + '_converted.jpg';
+                    // Generate filename with dimensions suffix
+                    const baseName = files[i].name.replace(/\.[^/.]+$/, '');
+                    const resultName = `${baseName}-${width}x${height}.jpg`;
                     results.push({ url, name: resultName });
                     processedImages.push({ url, name: resultName });
                     
