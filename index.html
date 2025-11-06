@@ -32,71 +32,79 @@
         <h1 class="text-3xl font-bold text-center text-gray-800 mb-8">Convert Images to 16x9 JPG</h1>
         
                 <div class="max-w-7xl mx-auto">
-            <!-- File Upload and Settings Grid -->
-            <div class="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-6">
-                <!-- File Upload Section -->
-                <div class="bg-white rounded-lg shadow-md p-6 lg:col-span-1">
-                    <h2 class="text-xl font-semibold mb-4">Upload Files</h2>
-                    <div id="dropzone" class="dropzone rounded-lg p-8 text-center cursor-pointer">
-                        <div class="text-gray-600">
-                            <svg class="mx-auto h-12 w-12 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
-                            </svg>
-                            <p class="text-lg">Drag and drop files here, or click to select</p>
-                            <p class="text-sm text-gray-500 mt-2">Supports any file type - converts to JPG</p>
-                        </div>
-                        <input type="file" id="fileInput" multiple accept="*/*" class="hidden">
-                    </div>
-                </div>
-
-                <!-- Settings Section -->
-                <div class="bg-white rounded-lg shadow-md p-6 lg:col-span-3">
-                    <h2 class="text-xl font-semibold mb-4">Conversion Settings</h2>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">Width (px)</label>
-                            <input type="number" id="width" value="1920" min="1" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">Height (px)</label>
-                            <input type="number" id="height" value="1080" min="1" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">Background Color (fills transparent areas)</label>
-                            <div class="color-picker-wrapper">
-                                <div class="flex gap-2">
-                                    <input type="color" id="bgColor" value="#000000" class="w-1/3 h-10 border border-gray-300 rounded-md">
-                                    <input type="text" id="hexInput" placeholder="#000000 (3 or 6 digits)" pattern="^#[0-9A-Fa-f]{3,6}$" class="w-2/3 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-mono">
-                                </div>
+            <!-- File Upload Section (Full Width) -->
+            <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+                <h2 class="text-xl font-semibold mb-4">Upload Files</h2>
+                <div class="flex flex-col lg:flex-row gap-6">
+                    <!-- Drop Zone -->
+                    <div class="lg:w-96 flex-shrink-0">
+                        <div id="dropzone" class="dropzone rounded-lg p-8 text-center cursor-pointer">
+                            <div class="text-gray-600">
+                                <svg class="mx-auto h-12 w-12 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                                </svg>
+                                <p class="text-lg">Drag and drop files here, or click to select</p>
+                                <p class="text-sm text-gray-500 mt-2">Supports any file type - converts to JPG</p>
                             </div>
+                            <input type="file" id="fileInput" multiple accept="*/*" class="hidden">
                         </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">Scaling Mode</label>
-                            <select id="scalingMode" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
-                                <option value="fit">Fit (maintain aspect ratio, add background)</option>
-                                <option value="fill">Fill (maintain aspect ratio, crop excess)</option>
-                                <option value="safe">Custom Safe Zone (image fits within custom aspect ratio)</option>
-                                <option value="custom">Choose new aspect ratio (crop to custom ratio)</option>
-                            </select>
-                            <p class="text-xs text-gray-500 mt-1">Fit: scales to fit dimensions, Fill: scales to fill dimensions</p>
-                            <p class="text-xs text-gray-500 mt-1">Custom Safe Zone: image maintains original aspect ratio and fits within safe zone of custom aspect ratio</p>
-                            <p class="text-xs text-gray-500 mt-1">Choose new aspect ratio: crops image to exact specified aspect ratio</p>
-                            <p class="text-xs text-gray-500 mt-1">Transparent areas in PNG files will be filled with the background color</p>
-                        </div>
-                        <div id="aspectRatioContainer" class="hidden">
-                            <label class="block text-sm font-medium text-gray-700 mb-2">Custom Aspect Ratio</label>
-                            <input type="text" id="aspectRatio" value="5/6" placeholder="5/6" pattern="^\d+/\d+$" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
-                            <p class="text-xs text-gray-500 mt-1">Enter aspect ratio as a fraction (e.g., 5/6, 4/3, 16/9, 1/1)</p>
-                        </div>
+                    </div>
+                    
+                    <!-- Preview Section -->
+                    <div id="previewSection" class="hidden flex-1">
+                        <h3 class="text-lg font-semibold mb-3">File Preview</h3>
+                        <div id="previewContainer" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4"></div>
                     </div>
                 </div>
             </div>
 
-            <!-- Convert Button -->
-            <div class="text-center mb-6">
-                <button id="convertBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-8 rounded-lg text-lg transition-colors duration-200">
-                    Convert Files to JPG
-                </button>
+            <!-- Conversion Settings Section -->
+            <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+                <h2 class="text-xl font-semibold mb-4">Conversion Settings</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Width (px)</label>
+                        <input type="number" id="width" value="1920" min="1" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Height (px)</label>
+                        <input type="number" id="height" value="1080" min="1" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Background Color (fills transparent areas)</label>
+                        <div class="color-picker-wrapper">
+                            <div class="flex gap-2">
+                                <input type="color" id="bgColor" value="#000000" class="w-1/3 h-10 border border-gray-300 rounded-md">
+                                <input type="text" id="hexInput" placeholder="#000000 (3 or 6 digits)" pattern="^#[0-9A-Fa-f]{3,6}$" class="w-2/3 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-mono">
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Scaling Mode</label>
+                        <select id="scalingMode" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="fit">Fit (maintain aspect ratio, add background)</option>
+                            <option value="fill">Fill (maintain aspect ratio, crop excess)</option>
+                            <option value="safe">Custom Safe Zone (image fits within custom aspect ratio)</option>
+                            <option value="custom">Choose new aspect ratio (crop to custom ratio)</option>
+                        </select>
+                        <p class="text-xs text-gray-500 mt-1">Fit: scales to fit dimensions, Fill: scales to fill dimensions</p>
+                        <p class="text-xs text-gray-500 mt-1">Custom Safe Zone: image maintains original aspect ratio and fits within safe zone of custom aspect ratio</p>
+                        <p class="text-xs text-gray-500 mt-1">Choose new aspect ratio: crops image to exact specified aspect ratio</p>
+                        <p class="text-xs text-gray-500 mt-1">Transparent areas in PNG files will be filled with the background color</p>
+                    </div>
+                    <div id="aspectRatioContainer" class="hidden">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Custom Aspect Ratio</label>
+                        <input type="text" id="aspectRatio" value="5/6" placeholder="5/6" pattern="^\d+/\d+$" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <p class="text-xs text-gray-500 mt-1">Enter aspect ratio as a fraction (e.g., 5/6, 4/3, 16/9, 1/1)</p>
+                    </div>
+                </div>
+                
+                <!-- Convert Button inside Settings -->
+                <div class="text-center pt-4 border-t border-gray-200">
+                    <button id="convertBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-8 rounded-lg text-lg transition-colors duration-200">
+                        Convert Files to JPG
+                    </button>
+                </div>
             </div>
 
             <!-- Status and Progress -->
@@ -110,12 +118,6 @@
                         <div id="progressBar" class="bg-blue-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
                     </div>
                 </div>
-            </div>
-
-            <!-- Preview Section -->
-            <div id="previewSection" class="hidden bg-white rounded-lg shadow-md p-6 mb-6">
-                <h2 class="text-xl font-semibold mb-4">File Preview</h2>
-                <div id="previewContainer" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4"></div>
             </div>
 
             <!-- Results Section -->

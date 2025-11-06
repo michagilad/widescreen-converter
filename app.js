@@ -692,6 +692,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                 spinner.innerHTML = '✓';
             }
             
+            // Automatically scroll to the success message and results
+            setTimeout(() => {
+                status.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 100);
+            
             console.log('All files processed successfully');
             
         } catch (error) {
