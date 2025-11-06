@@ -88,7 +88,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     function initializeAspectRatio() {
         // Show/hide aspect ratio field based on scaling mode
         function toggleAspectRatioField() {
-            if (scalingModeSelect.value === 'custom') {
+            if (scalingModeSelect.value === 'custom' || scalingModeSelect.value === 'safe') {
                 aspectRatioContainer.classList.remove('hidden');
             } else {
                 aspectRatioContainer.classList.add('hidden');
@@ -257,9 +257,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             
             // Log safe zone calculation for debugging
             if (scalingMode === 'safe') {
-                const safeZoneSize = Math.min(width, height);
-                console.log('1x1 Safe Zone mode selected - safe zone size:', safeZoneSize);
-                console.log('Image will be scaled to fit within', safeZoneSize, 'x', safeZoneSize, 'and centered on', width, 'x', height, 'background');
+                const aspectRatio = aspectRatioInput.value;
+                const safeDimensions = calculateSafeZoneDimensions(width, height, aspectRatio);
+                console.log('Custom Safe Zone mode selected - aspect ratio:', aspectRatio);
+                console.log('Safe zone dimensions:', safeDimensions);
+                console.log('Image will be scaled to fit within', safeDimensions.width, 'x', safeDimensions.height, 'safe zone and centered on', width, 'x', height, 'background');
             } else if (scalingMode === 'custom') {
                 const aspectRatio = aspectRatioInput.value;
                 const customDimensions = calculateSafeZoneDimensions(width, height, aspectRatio);
@@ -346,11 +348,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                                 `output${i}.jpg`
                             ];
                         } else if (scalingMode === 'safe') {
-                            // 1x1 Safe Zone mode: ensure image is no wider than 1:1, centered on 16:9 background
-                            console.log('Using 1x1 Safe Zone mode for PNG file');
+                            // Custom Safe Zone mode: ensure image fits within custom aspect ratio, centered on background
+                            console.log('Using Custom Safe Zone mode for PNG file');
                             
-                            // Calculate the maximum dimension for 1:1 safe zone
-                            const safeZoneSize = Math.min(width, height);
+                            // Calculate the safe zone dimensions based on custom aspect ratio
+                            const aspectRatio = aspectRatioInput.value;
+                            const safeDimensions = calculateSafeZoneDimensions(width, height, aspectRatio);
                             
                             enhancedCommand = [
                                 // Create a solid background color
@@ -359,9 +362,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                                 // Input the actual image
                                 '-i', inputFileName,
                                 '-filter_complex', [
-                                    // Scale the image to fit within the safe zone (1:1) while maintaining aspect ratio
-                                    `[1:v]scale=${safeZoneSize}:${safeZoneSize}:force_original_aspect_ratio=decrease:flags=lanczos[scaled]`,
-                                    // Overlay the scaled image centered on the 16:9 background
+                                    // Scale the image to fit within the safe zone while maintaining original aspect ratio
+                                    `[1:v]scale=${safeDimensions.width}:${safeDimensions.height}:force_original_aspect_ratio=decrease:flags=lanczos[scaled]`,
+                                    // Overlay the scaled image centered on the background
                                     `[0:v][scaled]overlay=(W-w)/2:(H-h)/2`
                                 ].join(';'),
                                 // Force output to JPG
@@ -453,17 +456,18 @@ document.addEventListener('DOMContentLoaded', async () => {
                                 `output${i}.jpg`
                             ];
                         } else if (scalingMode === 'safe') {
-                            // 1x1 Safe Zone mode: ensure image is no wider than 1:1, centered on 16:9 background
-                            console.log('Using 1x1 Safe Zone mode for non-transparent file');
+                            // Custom Safe Zone mode: ensure image fits within custom aspect ratio, centered on background
+                            console.log('Using Custom Safe Zone mode for non-transparent file');
                             
-                            // Calculate the maximum dimension for 1:1 safe zone
-                            const safeZoneSize = Math.min(width, height);
+                            // Calculate the safe zone dimensions based on custom aspect ratio
+                            const aspectRatio = aspectRatioInput.value;
+                            const safeDimensions = calculateSafeZoneDimensions(width, height, aspectRatio);
                             
                             enhancedCommand = [
                                 '-i', inputFileName,
                                 '-vf', [
-                                    // Scale the image to fit within the safe zone (1:1) while maintaining aspect ratio
-                                    `scale=${safeZoneSize}:${safeZoneSize}:force_original_aspect_ratio=decrease:flags=lanczos`,
+                                    // Scale the image to fit within the safe zone while maintaining original aspect ratio
+                                    `scale=${safeDimensions.width}:${safeDimensions.height}:force_original_aspect_ratio=decrease:flags=lanczos`,
                                     // Pad to exact dimensions with background color, centering the image
                                     `pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:color=${bgColorValue}`,
                                     // Ensure proper color space conversion
@@ -552,10 +556,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         
                         // Calculate dimensions for fallback approaches based on scaling mode
                         let fallbackDimensions;
-                        if (scalingMode === 'safe') {
-                            const safeZoneSize = Math.min(width, height);
-                            fallbackDimensions = { width: safeZoneSize, height: safeZoneSize };
-                        } else if (scalingMode === 'custom') {
+                        if (scalingMode === 'safe' || scalingMode === 'custom') {
                             const aspectRatio = aspectRatioInput.value;
                             fallbackDimensions = calculateSafeZoneDimensions(width, height, aspectRatio);
                         }

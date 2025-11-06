@@ -75,11 +75,11 @@
                             <select id="scalingMode" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
                                 <option value="fit">Fit (maintain aspect ratio, add background)</option>
                                 <option value="fill">Fill (maintain aspect ratio, crop excess)</option>
-                                <option value="safe">1x1 Safe Zone (image max 1:1, centered on 16:9 background)</option>
+                                <option value="safe">Custom Safe Zone (image fits within custom aspect ratio)</option>
                                 <option value="custom">Choose new aspect ratio (crop to custom ratio)</option>
                             </select>
                             <p class="text-xs text-gray-500 mt-1">Fit: scales to fit dimensions, Fill: scales to fill dimensions</p>
-                            <p class="text-xs text-gray-500 mt-1">1x1 Safe Zone: ensures image content never exceeds 1:1, centered on background</p>
+                            <p class="text-xs text-gray-500 mt-1">Custom Safe Zone: image maintains original aspect ratio and fits within safe zone of custom aspect ratio</p>
                             <p class="text-xs text-gray-500 mt-1">Choose new aspect ratio: crops image to exact specified aspect ratio</p>
                             <p class="text-xs text-gray-500 mt-1">Transparent areas in PNG files will be filled with the background color</p>
                         </div>
@@ -131,6 +131,6 @@
         </div>
     </div>
 
-    <script src="app.js"></script>
+    <script src="app.js?v=3"></script>
 </body>
 </html> 
